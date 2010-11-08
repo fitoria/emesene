@@ -2,8 +2,8 @@
 import extension
 
 WEBKITERROR = False
-INDICATORERROR = True # FIXME: Disabled until we can support theme changing!
-                      # see Indicator.py for the gory details
+INDICATORERROR = False
+
 def gtk_main(Controller):
     """ main method for gtk frontend
     """
@@ -14,7 +14,6 @@ def gtk_main(Controller):
 
     import AccountMenu
     import Avatar
-    import AvatarManager
     import AvatarChooser
     import config_gtk
     import ContactMenu
@@ -33,10 +32,12 @@ def gtk_main(Controller):
     import Header
     import ImageAreaSelector
     import ImageChooser
+
     try:
         import Indicator
     except ImportError:
         INDICATORERROR = True
+
     import Login
     import MainMenu
     import MainWindow
@@ -50,10 +51,13 @@ def gtk_main(Controller):
     import TrayIcon
     import UserPanel
     import Window
+
     try:
         import AdiumTextBox
     except ImportError:
         WEBKITERROR = True
+    
+    import PictureHandler
 
     setup()
     gobject.threads_init()
@@ -86,10 +90,10 @@ def setup():
     extension.category_register('image chooser', ImageChooser.ImageChooser)
     extension.category_register('avatar chooser', AvatarChooser.AvatarChooser)
     extension.category_register('avatar', Avatar.Avatar)
-    extension.category_register('avatar manager', AvatarManager.AvatarManager)
     extension.category_register('avatar renderer', Renderers.AvatarRenderer)
 
-    extension.category_register('preferences', Preferences.Preferences)
+    extension.category_register('preferences', Preferences.Preferences,
+            single_instance=True)
     extension.category_register('login window', Login.Login)
     extension.category_register('connecting window', Login.ConnectingWindow)
     extension.category_register('window frame', Window.Window)
@@ -98,11 +102,13 @@ def setup():
     extension.category_register('nick renderer', Renderers.CellRendererPlus)
     extension.register('nick renderer', Renderers.CellRendererNoPlus)
     extension.category_register('user panel', UserPanel.UserPanel)
+
     if not INDICATORERROR:
         extension.category_register('tray icon', Indicator.Indicator)
         extension.register('tray icon', TrayIcon.TrayIcon)
-    else:    
-        extension.category_register('tray icon', TrayIcon.TrayIcon)        
+    else:
+        extension.category_register('tray icon', TrayIcon.TrayIcon)
+
     extension.category_register('debug window', DebugWindow.DebugWindow)
     extension.category_register('nice bar', NiceBar.NiceBar)
 
@@ -148,4 +154,6 @@ def setup():
         extension.register(('notificationGUI'), GtkNotification.gtkNotification)
     except:
         extension.category_register(('notificationGUI'), GtkNotification.gtkNotification)
+    
+    extension.category_register('picture handler', PictureHandler.PictureHandler)
 

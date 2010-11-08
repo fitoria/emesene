@@ -2,6 +2,7 @@
 
 import Queue
 import threading
+import traceback
 
 import Logger
 from Event import Event
@@ -39,6 +40,9 @@ EVENTS = (\
  'filetransfer invitation', 'filetransfer completed',
  'filetransfer rejected', 'filetransfer canceled',
  'filetransfer accepted', 'filetransfer progress',
+ 'call invitation', 'call completed',
+ 'call rejected', 'call canceled',
+ 'call accepted', 'call progress',
  'p2p invitation',      'p2p finished',
  'p2p error',           'p2p canceled',
  'p2p accepted',        'p2p progress',
@@ -62,6 +66,8 @@ ACTIONS = (\
  'send message'     , 'conv invite',
  'ft invite', 'ft accept',
  'ft cancel', 'ft reject',
+ 'call invite', 'call accept',
+ 'call cancel', 'call reject',
  'p2p invite'       , 'p2p accept',
  'p2p cancel'       , 'media send', # media send if got Wink and audio clips
  'send oim')
@@ -133,6 +139,11 @@ class Worker(threading.Thread):
         dah[Action.ACTION_FT_ACCEPT] = self._handle_action_ft_accept
         dah[Action.ACTION_FT_REJECT] = self._handle_action_ft_reject
         dah[Action.ACTION_FT_CANCEL] = self._handle_action_ft_cancel
+        # call actions
+        dah[Action.ACTION_CALL_INVITE] = self._handle_action_call_invite
+        dah[Action.ACTION_CALL_ACCEPT] = self._handle_action_call_accept
+        dah[Action.ACTION_CALL_REJECT] = self._handle_action_call_reject
+        dah[Action.ACTION_CALL_CANCEL] = self._handle_action_call_cancel
 
         self.action_handlers = dah
 
@@ -149,6 +160,7 @@ class Worker(threading.Thread):
             except TypeError:
                 self.session.add_event(Event.EVENT_ERROR,
                     'Error calling action handler', action.id_)
+                traceback.print_exc()
 
 
     # action handlers (the stubs, copy and complete them on your implementation)
@@ -329,7 +341,7 @@ class Worker(threading.Thread):
 
     # ft handlers
     def _handle_action_ft_invite(self, t):
-        pass    
+        pass
     
     def _handle_action_ft_accept(self, t):
         pass
@@ -338,5 +350,18 @@ class Worker(threading.Thread):
         pass
 
     def _handle_action_ft_cancel(self, t):
+        pass
+
+    # call handlers
+    def _handle_action_call_invite(self, c):
+        pass
+    
+    def _handle_action_call_accept(self, c):
+        pass
+
+    def _handle_action_call_reject(self, c):
+        pass
+
+    def _handle_action_call_cancel(self, c):
         pass
 

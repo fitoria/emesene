@@ -26,6 +26,7 @@ class TrayIcon(gtk.StatusIcon):
 
         self.main_window = main_window
         self.conversations = None
+        self.last_new_message = None
 
         self.connect('activate', self._on_activate)
         self.connect('popup-menu', self._on_popup)
@@ -48,7 +49,10 @@ class TrayIcon(gtk.StatusIcon):
         method called to set the state to the main window
         """
         self.handler.session = session
-        self.handler.session.signals.status_change_succeed.subscribe(self._on_change_status)
+        self.handler.session.signals.status_change_succeed.subscribe(
+                                                      self._on_change_status)
+        self.handler.session.signals.conv_message.subscribe(self._on_message)
+        self.handler.session.signals.message_read.subscribe(self._on_read)
         self.menu = MainMenu(self.handler, self.main_window)
         self.menu.show_all()
         self.set_tooltip("emesene - " + self.handler.session.account.account)
@@ -64,13 +68,34 @@ class TrayIcon(gtk.StatusIcon):
         sets the contacts
         """
 
+    def _on_message(self, cid, account, msgobj, cedict={}):
+        """
+        Blink tray icon and save newest unread message
+        """
+        if not self.conversations.get_parent().is_active():
+            self.set_blinking(True)
+            self.last_new_message = cid
+
+    def _on_read(self, page):
+        """
+        Stop tray blinking and resets the newest unread message reference
+        """
+        self.set_blinking(False)
+        self.last_new_message = None
+
     def _on_activate(self, trayicon):
         """
         callback called when the status icon is activated
         (includes clicking the icon)
         """
-
-        if(self.main_window != None):
+        
+        if self.last_new_message is not None and self.is_blinking():
+            # show the tab with the latest message
+            conversation = self.conversations.conversations[self.last_new_message]
+            page = self.conversations.page_num(conversation)
+            self.conversations.set_current_page(page)
+            self.conversations.get_parent().present()
+        elif (self.main_window != None):
             if(self.main_window.get_property("visible")):
                 self.main_window.hide()
             else:
@@ -108,7 +133,7 @@ class LoginMenu(gtk.Menu):
         """
         gtk.Menu.__init__(self)
         self.handler = handler
-        self.hide_show_mainwindow = gtk.MenuItem('Hide/Show emesene')
+        self.hide_show_mainwindow = gtk.MenuItem(_('Hide/Show emesene'))
         self.quit = gtk.ImageMenuItem(gtk.STOCK_QUIT)
         self.quit.connect('activate',
             lambda *args: self.handler.on_quit_selected())
@@ -132,17 +157,17 @@ class MainMenu(gtk.Menu):
         self.handler = handler
 
         StatusMenu = extension.get_default('menu status')
-        self.status = gtk.ImageMenuItem('Status')
+        self.status = gtk.ImageMenuItem(_('Status'))
         self.status.set_image(gtk.image_new_from_stock(gtk.STOCK_CONVERT,
             gtk.ICON_SIZE_MENU))
         self.status_menu = StatusMenu(handler.on_status_selected)
         self.status.set_submenu(self.status_menu)
 
-        self.list = gtk.MenuItem('Contacts')
+        self.list = gtk.MenuItem(_('Contacts'))
         self.list_contacts = ContactsMenu(handler, main_window)
         self.list.set_submenu(self.list_contacts)
 
-        self.hide_show_mainwindow = gtk.MenuItem('Hide/Show emesene')
+        self.hide_show_mainwindow = gtk.MenuItem(_('Hide/Show emesene'))
 
         self.disconnect = gtk.ImageMenuItem(gtk.STOCK_DISCONNECT)
         self.disconnect.connect('activate',
@@ -163,7 +188,7 @@ class ContactsMenu(gtk.Menu):
     a gtk menu that contains session's contacts
     """
     NAME = 'Contacts Menu'
-    DESCRIPTION = 'A menu with sessions\' contacts'
+    DESCRIPTION = _('A menu with sessions\' contacts')
     AUTHOR = 'Riccardo (C10uD)'
     WEBSITE = 'www.emesene.org'
 

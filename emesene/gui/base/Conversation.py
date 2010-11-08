@@ -14,9 +14,13 @@ log = logging.getLogger('gui.base.Conversation')
 class Conversation(object):
     '''a widget that contains all the components inside'''
 
-    def __init__(self, session, cid, members=None):
+    def __init__(self, session, cid, update_window, members=None):
         '''constructor'''
+        self.update_window = update_window
         self.session = session
+        self.caches = e3.cache.CacheManager(self.session.config_dir.base_dir)
+        self.emcache = self.caches.get_emoticon_cache(self.session.account.account)
+
         self.cid = float(cid)
         self.formatter = e3.common.MessageFormatter(session.contacts.me)
         self.first = True
@@ -112,6 +116,16 @@ class Conversation(object):
         '''called when the clean button is clicked'''
         self.output.clear()
 
+    def on_block_user(self):
+        '''blocks the first user of the conversation'''
+        account = self.members[0]
+        contact = self.session.contacts.contacts[account]
+
+        if contact.blocked:
+            self.session.unblock(account)
+        else:
+            self.session.block(account)
+
     def on_emote(self, emote):
         '''called when a emote is selected on the emote window'''
         self.input.append(emote)
@@ -119,12 +133,17 @@ class Conversation(object):
     def on_notify_attention(self):
         '''called when the nudge button is clicked'''
         self.session.request_attention(self.cid)
-        self.output.information(self.formatter, self.session.contacts.me,
-                'you just sent a nudge!')
+        self.output.send_message(self.formatter, self.session.contacts.me,
+            _('You just sent a nudge!'), {}, '', None, self.first)
+
         self.play_nudge()
 
     def show(self):
         '''override the show method'''
+        raise NotImplementedError("Method not implemented")
+
+    def iconify(self):
+        '''override the iconify method'''
         raise NotImplementedError("Method not implemented")
 
     def update_message_waiting(self, is_waiting):
@@ -196,30 +215,33 @@ class Conversation(object):
 
     group_chat = property(fget=_get_group_chat)
 
-    def _on_send_message(self, text, cedict=None):
+    def _on_send_message(self, text):
         '''method called when the user press enter on the input text'''
-        self.session.send_message(self.cid, text, self.cstyle)
+        custom_emoticons = gui.base.MarkupParser.get_custom_emotes(text, self.emcache.parse())
+
+        self.session.send_message(self.cid, text, self.cstyle, self.emcache.parse(), custom_emoticons)
         self.output.send_message(self.formatter, self.session.contacts.me,
-                text, cedict, self.cstyle, self.first)
+                text, self.emcache.parse(), self.emcache.path, self.cstyle, self.first)
         self.messages.push(text)
         self.play_send()
         self.first = False
 
-    def on_receive_message(self, message, account, cedict):
+    def on_receive_message(self, message, account, received_custom_emoticons):
         '''method called when a message arrives to the conversation'''
         contact = self.session.contacts.get(account)
 
         if contact is None:
             contact = e3.Contact(account)
 
-        if message.type == e3.Message.TYPE_MESSAGE:
+        if message.type == e3.Message.TYPE_MESSAGE or message.type == e3.Message.TYPE_FLNMSG:
+            user_emcache = self.caches.get_emoticon_cache(account)
             self.output.receive_message(self.formatter, contact, message,
-                    cedict, self.first)
+                    received_custom_emoticons, user_emcache.path, self.first)
             self.play_type()
 
         elif message.type == e3.Message.TYPE_NUDGE:
             self.output.information(self.formatter, contact,
-                    '%s just sent you a nudge!' % (contact.display_name,))
+                    _('%s just sent you a nudge!') % (contact.display_name,))
             self.play_nudge()
 
         self.first = False
@@ -255,7 +277,7 @@ class Conversation(object):
     def _get_text(self):
         '''return the text that represent the conversation title'''
         if self.group_chat:
-            text = 'Group chat'
+            text = _('Group chat')
         elif len(self.members) == 1:
             contact = self.session.contacts.get(self.members[0])
 
@@ -279,6 +301,10 @@ class Conversation(object):
             self._update_single_information(self.members[0])
         elif len(self.members) > 1:
             self.update_group_information()
+
+    def update_p2p(self, account, _type, *what):
+        ''' update the p2p data in the conversation (custom emoticons) '''
+        self.output.update_p2p(account, _type, *what)
 
     def on_contact_joined(self, account):
         '''called when a contact joins the conversation'''
@@ -376,17 +402,20 @@ class Conversation(object):
         if self.session.config.b_play_type:
             gui.play(self.session, gui.theme.sound_type)
 
-    def cycle_history(self):
+    def cycle_history(self, change=-1):
         """
         return one of the last N messages sent, the one returned
         is the one pointed by message_offset, every time you call
         this function it will go to the previous one, you can
         reset it using reset_message_offset.
 
+        change is the direction of cycling, 1 will go forward
+        -1 will go backwards
+
         if no message in the buffer return an empty string
         """
         index = self.message_offset
-        self.message_offset -= 1
+        self.message_offset += change
 
         try:
             self.input.text = self.messages.peak(self.message_offset)

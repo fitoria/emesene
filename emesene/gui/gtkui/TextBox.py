@@ -19,7 +19,7 @@ class TextBox(gtk.ScrolledWindow):
         self.config = config
 
         self.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        self._textbox = gtk.TextView()
+        self._textbox = InputView()
         self._textbox.set_left_margin(4)
         self._textbox.set_right_margin(4)
         self._textbox.set_pixels_above_lines(4)
@@ -118,6 +118,20 @@ class TextBox(gtk.ScrolledWindow):
 
     text = property(fget=_get_text, fset=_set_text)
 
+class InputView(gtk.TextView):
+    __gsignals__ = {
+        'message-send':(gobject.SIGNAL_RUN_LAST|gobject.SIGNAL_ACTION,
+                        gobject.TYPE_NONE, ())
+    }
+
+    def __init__(self):
+        gobject.GObject.__init__(self)
+        gtk.TextView.__init__(self)
+        gtk.binding_entry_add_signal(self, gtk.keysyms.KP_Enter, 0, 'message-send')
+        gtk.binding_entry_add_signal(self, gtk.keysyms.Return, 0, 'message-send')
+
+gobject.type_register(InputView)
+
 class InputText(TextBox):
     '''a widget that is used to insert the messages to send'''
     NAME = 'Input Text'
@@ -140,6 +154,28 @@ class InputText(TextBox):
         self.invisible_tag.set_property('invisible', True)
         self._buffer.get_tag_table().add(self.invisible_tag)
 
+        self.spell_checker = None
+
+        try:
+            import gtkspell
+
+            self.spell_checker = gtkspell.Spell(self._textbox)
+        except ImportError as error:
+            pass
+
+        self._textbox.connect_after('message-send', self._on_message_send)
+
+    def _on_message_send(self, widget):
+        '''callback called when enter is pressed in the input widget'''
+
+        if self.text == "":
+            return True
+
+        self.on_send_message(self.text)
+        self.text = ''
+
+        return True
+
     def grab_focus(self):
         """
         override grab_focus method
@@ -152,17 +188,16 @@ class InputText(TextBox):
         self.apply_tag()
 
         if event.state == gtk.gdk.CONTROL_MASK and \
-                chr(event.keyval) == "p":
-            self.on_cycle_history()
-        elif (event.keyval == gtk.keysyms.Return or \
-                event.keyval == gtk.keysyms.KP_Enter) and \
-                not event.state == gtk.gdk.SHIFT_MASK:
-            if self.text == "":
-                return True
+                ((event.keyval < 256 and chr(event.keyval) == "p") or \
+                    event.keyval == gtk.keysyms.Up):
 
-            self.on_send_message(self.text)
-            self.text = ''
-            return True
+            self.on_cycle_history()
+
+        elif event.state == gtk.gdk.CONTROL_MASK and \
+                ((event.keyval < 256 and chr(event.keyval) == "n") or \
+                    event.keyval == gtk.keysyms.Down):
+
+            self.on_cycle_history(1)
 
     def parse_emotes(self):
         """
@@ -206,6 +241,7 @@ class InputText(TextBox):
 
         return True
 
+
     def update_style(self, style):
         '''update the global style of the widget'''
         try:
@@ -228,6 +264,22 @@ class InputText(TextBox):
 
         if is_new:
             self._buffer.get_tag_table().add(self._tag)
+
+        if self.spell_checker:
+            buffer = self._textbox.get_buffer()
+
+            if not buffer:
+                return
+
+            table = buffer.get_tag_table()
+            if not table:
+                return
+
+            tag = table.lookup('gtkspell-misspelled')
+            if not tag:
+                return
+
+            tag.set_priority(table.get_size() - 1)
 
         self.apply_tag()
 
@@ -259,11 +311,11 @@ class OutputText(TextBox):
     def append(self, text, cedict,scroll=True):
         '''append formatted text to the widget'''
         if self.config.b_show_emoticons:
-            text = MarkupParser.parse_emotes(text)
+            text = MarkupParser.parse_emotes(text, cedict)
 
         TextBox.append(self, text, scroll)
 
-    def send_message(self, formatter, contact, text, cedict, style, is_first):
+    def send_message(self, formatter, contact, text, cedict, cepath, style, is_first):
         '''add a message to the widget'''
         nick = contact.display_name
 
@@ -279,7 +331,7 @@ class OutputText(TextBox):
         all_ = first + middle + last
         self.append(all_, cedict, self.config.b_allow_auto_scroll)
 
-    def receive_message(self, formatter, contact, message, cedict, is_first):
+    def receive_message(self, formatter, contact, message, cedict, cepath, is_first):
         '''add a message to the widget'''
         is_raw, consecutive, outgoing, first, last = formatter.format(contact)
 
@@ -293,4 +345,8 @@ class OutputText(TextBox):
         '''add an information message to the widget'''
         self.append(formatter.format_information(message), None,
                 self.config.b_allow_auto_scroll)
+
+    def update_p2p(self, account, _type, *what):
+        ''' new p2p data has been received (custom emoticons) '''
+        return # NotImplemented
 

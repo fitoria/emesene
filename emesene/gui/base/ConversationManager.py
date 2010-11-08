@@ -30,6 +30,8 @@ class ConversationManager(object):
                 self._on_message_send_failed)
             self.session.signals.contact_attr_changed.subscribe(
                 self._on_contact_attr_changed)
+            self.session.signals.p2p_finished.subscribe(
+                self._on_p2p_finished)
 
     def add_new_conversation(self, session, cid, members):
         """
@@ -77,9 +79,11 @@ class ConversationManager(object):
         if conversation is not None:
             error = conversation.formatter.format_error(
                 'message couldn\'t be sent: ')
-            conversation.output.append(error,self.session.config.b_allow_auto_scroll)
+            conversation.output.append(error, {},
+                self.session.config.b_allow_auto_scroll)
             conversation.output.append(
-                self.format_from_message(message),self.session.config.b_allow_auto_scroll)
+                self.format_from_message(message),
+                {}, self.session.config.b_allow_auto_scroll)
         else:
             log.debug('conversation %s not found' % cid)
 
@@ -152,6 +156,12 @@ class ConversationManager(object):
             if account in conversation.members:
                 conversation.update_data()
 
+    def _on_p2p_finished(self, account, _type, *what):
+        ''' called when a p2p is finished - currently custom emoticons only '''
+        for conversation in self.conversations.values():
+            if account in conversation.members:
+                conversation.update_p2p(account, _type, *what)
+
     def on_conversation_close(self, conversation):
         """
         called when the user wants to close a conversation widget
@@ -186,5 +196,7 @@ class ConversationManager(object):
             self._on_message_send_failed)
         self.session.signals.contact_attr_changed.unsubscribe(
             self._on_contact_attr_changed)
+        self.session.signals.p2p_finished.unsubscribe(
+            self._on_p2p_finished)
         for conversation in self.conversations.values():
             self.close(conversation)

@@ -11,7 +11,7 @@ log = logging.getLogger('gui.gtkui.Notification')
 class Notification():
     '''emesene's notification system'''
     NAME = 'Notification'
-    DESCRIPTION = 'Emesene\'s notification system'
+    DESCRIPTION = 'emesene\'s notification system'
     AUTHOR = 'Cando'
     WEBSITE = 'www.emesene.org'
 
@@ -35,7 +35,7 @@ class Notification():
         self.notify_online = False
         self.last_online = None
 
-    def _on_message(self, cid, account, msgobj, cedict=None):
+    def _on_message(self, cid, account, msgobj, cedict={}):
         """
         This is called when a new message arrives to a user.
         """

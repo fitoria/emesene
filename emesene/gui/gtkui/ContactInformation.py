@@ -19,7 +19,7 @@ class ContactInformation(gtk.Window):
         '''constructor'''
         gtk.Window.__init__(self)
         self.set_default_size(640, 350)
-        self.set_title('Contact information (%s)' % (account,))
+        self.set_title(_('Contact information (%s)') % (account,))
         self.set_role("dialog")
         self.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_DIALOG)
         self.set_icon(utils.safe_gtk_image_load(gui.theme.logo).get_pixbuf())
@@ -67,24 +67,33 @@ class ContactInformation(gtk.Window):
         self.status = ListWidget(self.session, self.account)
         self.chats = ChatWidget(self.session, self.account)
 
-        self.tabs.append_page(self.info, gtk.Label('Information'))
-        self.tabs.append_page(self.nicks, gtk.Label('Nick history'))
-        self.tabs.append_page(self.messages, gtk.Label('Message history'))
-        self.tabs.append_page(self.status, gtk.Label('Status history'))
-        self.tabs.append_page(self.chats, gtk.Label('Chat history'))
+        self.tabs.append_page(self.info, gtk.Label(_('Information')))
+        self.tabs.append_page(self.nicks, gtk.Label(_('Nick history')))
+        self.tabs.append_page(self.messages, gtk.Label(_('Message history')))
+        self.tabs.append_page(self.status, gtk.Label(_('Status history')))
+        self.tabs.append_page(self.chats, gtk.Label(_('Chat history')))
 
     def _on_nicks_ready(self, results):
         '''called when the nick history is ready'''
+        if not results:
+            return
+
         for (stat, timestamp, nick) in results:
             self.nicks.add(stat, timestamp, nick)
 
     def _on_messages_ready(self, results):
         '''called when the message history is ready'''
+        if not results:
+            return
+
         for (stat, timestamp, message) in results:
             self.messages.add(stat, timestamp, message)
 
     def _on_status_ready(self, results):
         '''called when the status history is ready'''
+        if not results:
+            return
+
         for (stat, timestamp, stat_) in results:
             self.status.add(stat, timestamp, e3.status.STATUS.get(stat,
                 'unknown'))
@@ -115,14 +124,14 @@ class InformationWidget(gtk.VBox):
         table.set_row_spacings(10)
         table.set_col_spacings(10)
 
-        l_image = gtk.Label('Image')
+        l_image = gtk.Label(_('Image'))
         l_image.set_alignment(0.0, 0.5)
-        l_nick = gtk.Label('Nick')
+        l_nick = gtk.Label(_('Nick'))
         l_nick.set_ellipsize(pango.ELLIPSIZE_END)
         l_nick.set_alignment(0.0, 0.5)
-        l_status = gtk.Label('Status')
+        l_status = gtk.Label(_('Status'))
         l_status.set_alignment(0.0, 0.5)
-        l_message = gtk.Label('Message')
+        l_message = gtk.Label(_('Message'))
         l_message.set_alignment(0.0, 0.5)
         l_message.set_ellipsize(pango.ELLIPSIZE_END)
 
@@ -236,7 +245,7 @@ class ChatWidget(gtk.VBox):
         save = gtk.Button(stock=gtk.STOCK_SAVE)
         refresh = gtk.Button(stock=gtk.STOCK_REFRESH)
 
-        toggle_calendars = gtk.Button("Hide calendars")
+        toggle_calendars = gtk.Button(_("Hide calendars"))
 
         buttons.pack_start(toggle_calendars)
         buttons.pack_start(refresh)
@@ -258,9 +267,9 @@ class ChatWidget(gtk.VBox):
         refresh.connect('clicked', self._on_refresh_clicked)
         toggle_calendars.connect('clicked', self._on_toggle_calendars)
 
-        self.calendars.pack_start(gtk.Label('Chats from:'), False)
+        self.calendars.pack_start(gtk.Label(_('Chats from')), False)
         self.calendars.pack_start(self.from_calendar, True, True)
-        self.calendars.pack_start(gtk.Label('Chats to:'), False)
+        self.calendars.pack_start(gtk.Label(_('Chats to')), False)
         self.calendars.pack_start(self.to_calendar, True, True)
 
         chat_box.pack_start(self.text, True, True)
@@ -276,10 +285,10 @@ class ChatWidget(gtk.VBox):
         '''called when the toogle_calendars button is clicked
         '''
         if self.calendars.get_property('visible'):
-            button.set_label('Show calendars')
+            button.set_label(_('Show calendars'))
             self.calendars.hide()
         else:
-            button.set_label('Hide calendars')
+            button.set_label(_('Hide calendars'))
             self.calendars.show()
 
     def _on_save_clicked(self, button):
@@ -321,6 +330,9 @@ class ChatWidget(gtk.VBox):
         def _on_save_chats_ready(results):
             '''called when the chats requested are ready
             '''
+            if not results:
+                return
+
             exporter = extension.get_default('history exporter')
             exporter(results, path)
 
@@ -328,20 +340,27 @@ class ChatWidget(gtk.VBox):
 
     def _on_chats_ready(self, results):
         '''called when the chat history is ready'''
+        if not results:
+            return
+
         for (stat, timestamp, message, nick) in results:
             date_text = time.strftime('[%c]', time.gmtime(timestamp))
             tokens = message.split('\r\n', 3)
             type_ = tokens[0]
 
+            # XXX: hack, I don't have the mail here FIXME
+            contact = e3.Contact(nick)
+
             if type_ == 'text/x-msnmsgr-datacast':
-                self.text.append(date_text + ' ' + nick + ': ' + '<i>nudge</i><br/>')
+                self.output.information(self.formatter, contact,
+                    _('%s just sent you a nudge!') % (nick,))
             elif type_.find('text/plain;') != -1:
                 try:
                     (type_, format, empty, text) = tokens
-                    self.text.append(self.formatter.format_history(
+                    self.text.add_message(self.formatter.format_history(
                         date_text, nick, text))
                 except ValueError:
-                    log.debug('Invalid number of tokens' + str(tokens))
+                    log.debug(_('Invalid number of tokens') + str(tokens))
             else:
-                log.debug('unknown message type on ContactInfo')
+                log.debug(_('unknown message type on ContactInfo'))
 
